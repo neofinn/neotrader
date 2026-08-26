@@ -1,0 +1,29 @@
+services:
+  neotrader:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: neotrader
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      NEO_TRADER_MODE: paper
+      ALPACA_PAPER: "true"
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: 8000
+    volumes:
+      - neotrader-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  neotrader-data:
