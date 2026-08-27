@@ -15,8 +15,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
     operator_token = os.getenv("NEOTRADER_OPERATOR_TOKEN", "")
 
     def _authorized(self) -> bool:
-        # If no token is configured, keep local/dev behavior. Production deployment
-        # must set NEOTRADER_OPERATOR_TOKEN.
         if not self.operator_token:
             return True
         supplied = self.headers.get("X-NeoTrader-Token", "")
@@ -32,6 +30,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        if self.path == "/health":
+            self._json(200, {"status": "ok", "paper_only": True})
+            return
         if self.path.startswith("/api/") and not self._authorized():
             self._json(401, {"error": "unauthorized"})
             return
