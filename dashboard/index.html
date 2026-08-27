@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NeoTrader Control Center</title>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;background:#0b1020;color:#edf2f7}body{margin:0;padding:24px}.wrap{max-width:1200px;margin:auto}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}.badge{padding:7px 12px;border-radius:999px;background:#172033;color:#9fb2cc}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:#121a2a;border:1px solid #26334a;border-radius:14px;padding:18px}.wide{grid-column:span 2}.metric{font-size:28px;font-weight:700;margin-top:8px}.label{font-size:12px;color:#8ea0b8;text-transform:uppercase;letter-spacing:.08em}.controls{display:flex;gap:10px;flex-wrap:wrap}button{border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer;background:#29466b;color:white}button.danger{background:#8d3030}button.safe{background:#276247}input{padding:12px;border-radius:10px;border:1px solid #26334a;background:#0b1020;color:white;width:min(420px,90%)}pre{white-space:pre-wrap;color:#b9c7d9}.status{display:flex;gap:12px;align-items:center}.dot{width:10px;height:10px;border-radius:50%;background:#d05b5b}.dot.on{background:#4ecb84}@media(max-width:800px){.grid{grid-template-columns:1fr 1fr}.wide{grid-column:span 2}}
+</style>
+</head>
+<body><div class="wrap">
+<div class="top"><div><h1>NeoTrader</h1><div class="badge">Alpaca Paper • 3-Layer Brain</div></div><div class="status"><span id="dot" class="dot"></span><span id="mode">OFF / KILL SWITCH</span></div></div>
+<div class="grid">
+<div class="card"><div class="label">System</div><div id="system" class="metric">OFF</div></div>
+<div class="card"><div class="label">Decisions</div><div id="decisions" class="metric">0</div></div>
+<div class="card"><div class="label">Paper Trades</div><div id="trades" class="metric">0</div></div>
+<div class="card"><div class="label">2R Wins</div><div id="wins" class="metric">0</div></div>
+<div class="card wide"><div class="label">Operator authentication</div><p>Enter the server operator token. It is stored only in this browser's local storage.</p><input id="token" type="password" placeholder="NEOTRADER_OPERATOR_TOKEN"><button onclick="saveToken()">CONNECT</button></div>
+<div class="card wide"><div class="label">Controls</div><p>Execution remains paper-only. Kill switch overrides the system enable state.</p><div class="controls"><button class="safe" onclick="setEnabled(true)">START PAPER</button><button onclick="setEnabled(false)">STOP</button><button class="danger" onclick="setKill(true)">KILL SWITCH</button><button onclick="setKill(false)">CLEAR KILL</button></div></div>
+<div class="card wide"><div class="label">Latest decision</div><pre id="decision">No decisions yet.</pre></div>
+<div class="card wide"><div class="label">Brain status</div><pre id="health">OpenBB: —\nTradingAgents: —\nPaperclip: —\nConfluence: —\nAlpaca: PAPER ONLY</pre></div>
+</div></div>
+<script>
+const tokenKey='neotrader.operator.token';
+function token(){return localStorage.getItem(tokenKey)||''}
+function saveToken(){localStorage.setItem(tokenKey,document.querySelector('#token').value);refresh()}
+async function api(path,options={}){options.headers={...(options.headers||{}),'X-NeoTrader-Token':token()};const r=await fetch(path,options);if(r.status===401)throw new Error('Unauthorized');return r}
+async function refresh(){try{const r=await api('/api/status');const s=await r.json();document.querySelector('#system').textContent=s.enabled?'RUNNING':'OFF';document.querySelector('#mode').textContent=s.kill_switch?'OFF / KILL SWITCH':(s.enabled?'PAPER RUNNING':'OFF');document.querySelector('#dot').className='dot '+(s.enabled?'on':'');document.querySelector('#decisions').textContent=s.counters.decisions;document.querySelector('#trades').textContent=s.counters.trades;document.querySelector('#wins').textContent=s.counters.wins;document.querySelector('#decision').textContent=s.last_decision?JSON.stringify(s.last_decision,null,2):'No decisions yet.'}catch(e){document.querySelector('#health').textContent=e.message==='Unauthorized'?'Operator token required.':'Control API unavailable.'}}
+async function post(path,body){await api(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body||{})});refresh()}
+function setEnabled(v){post('/api/control/enabled',{enabled:v})}function setKill(v){post('/api/control/kill-switch',{active:v})}document.querySelector('#token').value=token();refresh();setInterval(refresh,3000)
+</script></body></html>
