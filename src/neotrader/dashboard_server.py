@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import hmac
 import json
+import os
 from pathlib import Path
 
 from .operator import OperatorStore
@@ -10,6 +12,15 @@ from .operator import OperatorStore
 class DashboardHandler(BaseHTTPRequestHandler):
     store = OperatorStore()
     root = Path(__file__).resolve().parents[2] / "dashboard" / "index.html"
+    operator_token = os.getenv("NEOTRADER_OPERATOR_TOKEN", "")
+
+    def _authorized(self) -> bool:
+        # If no token is configured, keep local/dev behavior. Production deployment
+        # must set NEOTRADER_OPERATOR_TOKEN.
+        if not self.operator_token:
+            return True
+        supplied = self.headers.get("X-NeoTrader-Token", "")
+        return hmac.compare_digest(supplied, self.operator_token)
 
     def _json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload).encode()
@@ -21,6 +32,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        if self.path.startswith("/api/") and not self._authorized():
+            self._json(401, {"error": "unauthorized"})
+            return
         if self.path == "/api/status":
             self._json(200, self.store.snapshot())
             return
@@ -35,8 +49,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self) -> None:
-        length = int(self.headers.get("Content-Length", "0"))
-        payload = json.loads(self.rfile.read(length) or b"{}")
+        if not self._authorized():
+            self._json(401, {"error": "unauthorized"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except (ValueError, json.JSONDecodeError):
+            self._json(400, {"error": "invalid_json"})
+            return
         if self.path == "/api/control/enabled":
             self._json(200, self.store.set_enabled(bool(payload.get("enabled"))).__dict__)
             return
@@ -46,8 +67,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
 
-def serve(host: str = "0.0.0.0", port: int = 8080) -> None:
-    ThreadingHTTPServer((host, port), DashboardHandler).serve_forever()
+def serve(host: str | None = None, port: int | None = None) -> None:
+    bind_host = host or os.getenv("DASHBOARD_HOST", "0.0.0.0")
+    bind_port = port or int(os.getenv("DASHBOARD_PORT", "8000"))
+    ThreadingHTTPServer((bind_host, bind_port), DashboardHandler).serve_forever()
 
 
 if __name__ == "__main__":
