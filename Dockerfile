@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -6,20 +6,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY pyproject.toml ./
+COPY pyproject.toml requirements.txt ./
 COPY src ./src
 COPY dashboard ./dashboard
 
 RUN pip install --upgrade pip \
-    && pip install . \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir . \
     && useradd --create-home --uid 10001 neotrader \
+    && mkdir -p /app/runtime \
     && chown -R neotrader:neotrader /app
 
 USER neotrader
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
-
-CMD ["python", "-m", "neotrader.dashboard"]
+CMD ["python", "-m", "neotrader.dashboard_server"]
